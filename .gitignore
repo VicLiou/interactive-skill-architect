@@ -1,0 +1,33 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 作業系統 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 編輯器 / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- 本工具的暫存 / 稽核輸出 ----
+# scan-security.py 與 validate-skill.py 為唯讀工具，不產生檔案；
+# 若日後把稽核報告輸出成本機檔，可放在 out/ 並於此忽略。
+out/
+*.log
+*.tmp
