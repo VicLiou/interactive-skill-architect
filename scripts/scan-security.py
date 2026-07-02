@@ -21,15 +21,17 @@ scan-security.py — 對一個 Skill 資料夾做「確定性」的資安 patter
     PowerShell 腳本因解碼錯誤而整個逃過掃描。
   - 平台/語言：Unix shell、Windows(PowerShell/cmd/LOLBins)、多語言 runtime、
     設定檔宣告的自動執行（MCP command / hooks）。
+  - 二進位以內容嗅探為主、副檔名為輔判定（防改名繞過），無法內容掃描但會**輸出 SHA256 指紋**供外部比對；
+    symlink 只記錄指向、不讀其內容（避免被誘導讀到資料夾外機敏檔）；檔數達 MAX_FILES 上限即截斷（DoS 自保）。
   - 已知限制（見檔尾與 security-audit-mode.md Gotchas）：逐行比對，無法偵測
-    跨行拆分／整段編碼混淆的 payload；二進位檔無法掃描（僅提示存在）。
+    跨行拆分／整段編碼混淆的 payload；二進位內容本身無法掃描（僅出指紋）。
 
 由 interactive-skill-architect 的資安稽核模式（Phase S1 初篩／Phase S3 回歸掃描）與
 優化模式全面健檢加掛資安時呼叫；環境無法執行時退回人工逐檔審。
 """
 import sys, os, re
-
-MAX_BYTES = 10 * 1024 * 1024   # 單檔最多讀 10MB，避免超大檔造成 DoS
+sys.dont_write_bytecode = True   # 唯讀承諾（§13.2）：禁止 import 產生 __pycache__，須在 import _shared 之前設定
+from _shared import BINARY_EXTS, is_binary, sha256_of, MAX_BYTES, MAX_FILES   # 單一真相
 
 # (維度, 規則名, 正規表達式, 初判提示, 是否忽略大小寫)。
 # 初判僅供參考，最終分級由 Agent 依 checklist 裁定。
@@ -78,6 +80,7 @@ RULES = [
     ("SEC-3", "隱藏/雙向覆寫字元 (zero-width/Trojan Source)", r"[​‌‍⁠‪-‮]", "High", False),
 
     # ---------- SEC-4 權限與外部呼叫 ----------
+    ("SEC-4", "下載可執行物（須確認有無 hash/簽章校驗）", r"(curl|wget|invoke-webrequest|iwr|invoke-restmethod|irm)\b[^\n]*\.(exe|msi|dll|sh|ps1|bat|cmd|scr|jar|whl|pkg|dmg|deb|rpm)\b|(-o|-outfile|--output)\s+\S*\.(exe|msi|dll|sh|ps1|bat|cmd|scr|jar|whl|pkg|dmg|deb|rpm)\b", "Low", True),
     ("SEC-4", "命令注入傾向 eval/sh -c/IEX 帶變數", r"eval\s+[\"']?\$|sh\s+-c\s+[\"'][^\"']*\$|invoke-expression\b[^\n]*\$", "High", True),
     ("SEC-4", "設定檔宣告自動執行 (MCP command/hooks/git hookspath)", r"\"command\"\s*:\s*\[?\s*\"|core\.hookspath|core\.fsmonitor|sshcommand\s*=|\"(pre|post)tooluse\"\s*:|\"hooks\"\s*:", "Medium", True),
     ("SEC-4", "frontmatter 過度授權 allowed-tools", r"allowed-tools\s*:.*(\*|bash)", "Medium", True),
@@ -86,14 +89,6 @@ RULES = [
 
 COMPILED = [(dim, name, re.compile(pat, re.IGNORECASE if ci else 0), hint)
             for (dim, name, pat, hint, ci) in RULES]
-
-BINARY_EXTS = {".pyc",".pyo",".so",".o",".a",".dll",".dylib",".exe",".bin",".class",
-               ".png",".jpg",".jpeg",".gif",".bmp",".ico",".webp",".tiff",
-               ".pdf",".zip",".tar",".gz",".bz2",".xz",".7z",".rar",
-               ".woff",".woff2",".ttf",".otf",".eot",
-               ".mp3",".mp4",".wav",".avi",".mov",".mkv",".flac",
-               ".db",".sqlite",".pickle",".pkl",".npy",".npz",".parquet"}
-
 
 def read_text(p):
     """編碼強健讀檔：處理 UTF-8 / UTF-16(BOM 或無 BOM) / latin-1，
@@ -107,36 +102,55 @@ def read_text(p):
             return raw.decode("utf-16")
         except Exception:
             pass
-    try:
-        return raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        pass
-    if raw.count(b"\x00") > len(raw) // 4:          # 無 BOM 的 UTF-16：null 密度高
+    # 無 BOM 的 UTF-16（null 密度高）：必須「先於」utf-8 嘗試——否則 ASCII 的 UTF-16
+    # 會被 utf-8 成功解成夾雜 NUL 的亂碼字串（NUL 是合法 utf-8 碼位），使 pattern 全數掃不到而漏報。
+    if raw.count(b"\x00") > len(raw) // 4:
         for enc in ("utf-16-le", "utf-16-be", "utf-16"):
             try:
                 return raw.decode(enc)
             except Exception:
                 pass
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
     return raw.decode("latin-1")                     # 不會失敗，保留 ASCII pattern
 
 
 def collect_files(target):
-    """遞迴收集檔案；.git 只納入 hooks(非 .sample) 與 config，其餘略過。"""
-    files, skipped_bin, symlinks = [], [], []
+    """遞迴收集檔案；.git 只納入 hooks(非 .sample) 與 config，其餘略過。
+
+    安全設計（style-guide §13.3）：
+      - symlink **不讀取其內容**，只記錄連結與指向路徑（避免被誘導讀到資料夾外的機敏檔）；
+      - 二進位以內容嗅探為主、副檔名為輔判定（防改名繞過），並計算 SHA256 供身分驗證/掉包偵測；
+      - os.walk 預設 followlinks=False，不遞迴進 symlink 指向的目錄；
+      - 檔數上限 MAX_FILES，避免超深/超大樹造成 DoS。
+    """
+    files, skipped_bin, symlinks, truncated = [], [], [], [False]
 
     def add(p):
         rel = os.path.relpath(p, target).replace(os.sep, "/")
-        if os.path.islink(p):
-            symlinks.append(rel)
-        if os.path.splitext(p)[1].lower() in BINARY_EXTS:
-            skipped_bin.append(rel)
+        if os.path.islink(p):                       # symlink：只記錄、不讀內容
+            try:
+                tgt = os.readlink(p)
+            except OSError:
+                tgt = "?"
+            symlinks.append((rel, tgt))
+            return
+        if is_binary(p):                            # 內容嗅探為主、副檔名為輔
+            skipped_bin.append((rel, sha256_of(p)))
         else:
             files.append((p, rel))
 
     for root, dirs, fnames in os.walk(target):
         dirs[:] = [d for d in dirs if d != ".git"]
         for fn in fnames:
+            if len(files) + len(skipped_bin) >= MAX_FILES:
+                truncated[0] = True
+                break
             add(os.path.join(root, fn))
+        if truncated[0]:
+            break
 
     # 額外納入 .git 的自動執行面（hooks 與 config）
     git_dir = os.path.join(target, ".git")
@@ -149,7 +163,7 @@ def collect_files(target):
             fp = os.path.join(hooks, fn)
             if os.path.isfile(fp) and not fn.endswith(".sample"):
                 add(fp)
-    return files, skipped_bin, symlinks
+    return files, skipped_bin, symlinks, truncated[0]
 
 
 def main():
@@ -158,7 +172,7 @@ def main():
         print("ERROR: 路徑不存在或非資料夾: " + target)
         return 2
 
-    files, skipped_bin, symlinks = collect_files(target)
+    files, skipped_bin, symlinks, truncated = collect_files(target)
 
     hits = []  # (dim, rule, hint, rel, lineno, line)
     for p, rel in files:
@@ -174,16 +188,18 @@ def main():
     print("（已遞迴掃描 " + str(len(files)) + " 個文字檔，含隱藏檔/.git hooks；編碼強健；涵蓋 Unix/Windows/多語言/設定檔）")
     print("（決定性初篩，非最終判定；每項須由 Agent 依 security-checklist.md 語意複核與分級）\n")
 
-    need_review = bool(skipped_bin or symlinks)
+    need_review = bool(skipped_bin or symlinks or truncated)
+    if truncated:
+        print("⚠ 檔案數達上限 " + str(MAX_FILES) + "，掃描已截斷（資源上限保護）；請分區重掃或人工確認剩餘檔案。\n")
     if skipped_bin:
-        print("⚠ 無法掃描的二進位檔（須人工確認用途/來源，尤其位於 scripts/）：")
-        for r in skipped_bin:
-            print("    " + r)
+        print("⚠ 無法掃描的二進位檔（含 SHA256 指紋；須人工確認用途/來源，並拿 hash 去外部比對 VirusTotal／廠商公布值／Authenticode）：")
+        for rel, digest in skipped_bin:
+            print("    " + rel + "  sha256=" + (digest or "?"))
         print("")
     if symlinks:
-        print("⚠ 偵測到符號連結（可能指向資料夾外，須人工確認）：")
-        for r in symlinks:
-            print("    " + r)
+        print("⚠ 偵測到符號連結（未讀取其內容；須人工確認指向是否逃逸資料夾外）：")
+        for rel, tgt in symlinks:
+            print("    " + rel + "  ->  " + tgt)
         print("")
 
     if not hits:

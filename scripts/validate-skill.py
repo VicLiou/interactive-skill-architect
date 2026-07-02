@@ -14,7 +14,9 @@ validate-skill.py — 對一個 Skill 資料夾做「確定性」的機械檢查
 由 interactive-skill-architect 的建立模式（Phase 4／寫入後）與優化模式
 （Phase O1 預檢／Phase O3 放行前）呼叫；環境無法執行時退回人工檢查。
 """
-import sys, os, re, glob
+import sys, os, re
+sys.dont_write_bytecode = True   # 唯讀承諾（§13.2）：禁止 import 產生 __pycache__，須在 import _shared 之前設定
+from _shared import BINARY_EXTS, is_binary, MAX_BYTES, MAX_FILES   # 單一真相：共用常數與二進位嗅探
 
 def main():
     target = sys.argv[1] if len(sys.argv) > 1 else "."
@@ -24,42 +26,66 @@ def main():
     results = []
     add = lambda lv, nm, dt: results.append((lv, nm, dt))
 
-    files = [p for p in glob.glob(os.path.join(target, "**", "*"), recursive=True)
-             if os.path.isfile(p)]
+    # 檔案走訪（§13.3）：os.walk 預設不跟隨 symlink 目錄（glob 會，故不用）；
+    # 沿用先前行為略過隱藏檔（含 .git）；檔數上限 MAX_FILES 防超大樹 DoS。
+    files, truncated = [], False
+    for root, dirs, fnames in os.walk(target):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fn in fnames:
+            if fn.startswith("."):
+                continue
+            if len(files) >= MAX_FILES:
+                truncated = True
+                break
+            fp = os.path.join(root, fn)
+            if os.path.isfile(fp) or os.path.islink(fp):
+                files.append(fp)
+        if truncated:
+            break
+    if truncated:
+        add("WARN", "走訪上限", f"檔案數達上限 {MAX_FILES}，檢查已截斷；請分區重驗或人工確認剩餘檔案")
 
-    # 已知二進位副檔名：這些跳過文字驗證；其餘一律驗 UTF-8/NUL（反向判定，避免白名單漏網）。
-    BINARY_EXTS = {".pyc",".pyo",".so",".o",".a",".dll",".dylib",".exe",".bin",".class",
-                   ".png",".jpg",".jpeg",".gif",".bmp",".ico",".webp",".tiff",
-                   ".pdf",".zip",".tar",".gz",".bz2",".xz",".7z",".rar",
-                   ".woff",".woff2",".ttf",".otf",".eot",
-                   ".mp3",".mp4",".wav",".avi",".mov",".mkv",".flac",
-                   ".db",".sqlite",".pickle",".pkl",".npy",".npz",".parquet"}
+    # 二進位判定改為「內容嗅探為主、副檔名為輔」（style-guide §13.4），
+    # 防止把二進位改名成 .md/.txt 繞過文字驗證；BINARY_EXTS 由 _shared 提供（單一真相）。
 
-    # 1. 編碼/完整性（預設驗所有檔的 NUL + UTF-8；僅已知二進位副檔名跳過，避免漏驗）
-    probs, bins = [], []
+    # 1. 編碼/完整性（預設驗所有檔的 NUL + UTF-8；被判定為二進位者跳過文字驗證）
+    probs, bins, masq = [], [], []
     for p in files:
         rel = os.path.relpath(p, target).replace(os.sep, "/")
         ext = os.path.splitext(p)[1].lower()
+        if os.path.islink(p):                    # symlink：不讀內容（§13.3），只記錄
+            probs.append(f"{rel}: 為符號連結，已跳過（指向 {os.readlink(p)}；請人工確認未逃逸資料夾）")
+            continue
         try:
+            if os.path.getsize(p) > MAX_BYTES:   # 資源上限（§13.3）：超大檔不整檔載入，明確告警而非靜默通過
+                probs.append(f"{rel}: 超過單檔上限 {MAX_BYTES // (1024*1024)}MB，未驗證（請人工確認）")
+                continue
             b = open(p, "rb").read()
         except Exception as e:
             probs.append(f"{rel}: 無法讀取 ({e})"); continue
-        if ext in BINARY_EXTS:
-            bins.append(rel); continue          # 已知二進位資產：跳過文字驗證
+        if is_binary(p):                         # 內容嗅探或已知副檔名 → 視為二進位，跳過文字驗證
+            bins.append(rel)
+            if ext not in BINARY_EXTS:           # 內容像二進位卻用文字副檔名 → 疑似偽裝
+                masq.append(rel)
+            continue
         if b"\x00" in b:
-            probs.append(f"{rel}: 含 NUL 位元組（若為未列入的二進位請補列 BINARY_EXTS，否則疑似損壞）")
+            probs.append(f"{rel}: 含 NUL 位元組（疑似損壞或未被嗅探識別的二進位）")
         try:
             b.decode("utf-8")
         except UnicodeDecodeError as e:
             probs.append(f"{rel}: UTF-8 解析失敗 @ byte {e.start}（可能尾字被截斷）")
     add("FAIL" if probs else "PASS", "編碼/完整性",
         "; ".join(probs) or "所有文字檔合法 UTF-8、無 NUL")
-    # 二進位檔提示：scripts/ 下的二進位需確認是否應納入 Skill（依 style-guide §9）
+    # 二進位檔提示：scripts/ 下的二進位、或內容像二進位卻偽裝成文字副檔名者需人工確認（依 §9／§13.4）
     if bins:
         in_scripts = [r for r in bins if r.startswith("scripts/")]
-        add("WARN" if in_scripts else "PASS", "二進位檔偵測",
-            (f"scripts/ 含二進位（確認是否應納入）: {', '.join(in_scripts)}; " if in_scripts else "")
-            + f"已略過文字驗證: {', '.join(bins)}")
+        detail = ""
+        if in_scripts:
+            detail += f"scripts/ 含二進位（確認是否應納入並登錄 SHA256/來源）: {', '.join(in_scripts)}; "
+        if masq:
+            detail += f"內容疑似二進位卻用文字副檔名（可能偽裝）: {', '.join(masq)}; "
+        detail += f"已略過文字驗證: {', '.join(bins)}"
+        add("WARN" if (in_scripts or masq) else "PASS", "二進位檔偵測", detail)
 
     # 2. SKILL.md 存在
     sp = os.path.join(target, "SKILL.md")
@@ -95,9 +121,10 @@ def main():
     md = "\n".join(open(p, encoding="utf-8", errors="replace").read()
                    for p in files if p.endswith(".md"))
     orphans = []
+    META_FILES = {"SKILL.md", "LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE", "README.md"}  # 慣例後設檔不算孤兒
     for p in files:
         rel = os.path.relpath(p, target).replace(os.sep, "/")
-        if rel == "SKILL.md": continue
+        if rel in META_FILES: continue
         if os.path.basename(p) not in md and rel not in md:
             orphans.append(rel)
     add("WARN" if orphans else "PASS", "孤兒檔偵測",

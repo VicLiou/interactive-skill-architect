@@ -1,12 +1,13 @@
 ---
 name: interactive-skill-architect
 description: |
-  負責 AI Agent Skill 的完整生命週期：透過結構化訪談從零建立符合最佳實踐的 Skill，或對既有 Skill 進行品質健檢與優化、將其校正為與本工具產出一致的標準。
+  負責 AI Agent Skill 的完整生命週期：透過結構化訪談從零建立符合最佳實踐的 Skill，對既有 Skill 進行品質健檢與優化、將其校正為與本工具產出一致的標準，或對既有 Skill 做資安稽核與風險分級。
   當使用者說「建立 skill」、「設計新技能」、「寫一個 skill」、「創建 skill」、「幫我做一個技能」時，進入建立模式。
   當使用者說「優化 skill」、「改善技能」、「skill 健檢」、「幫我檢查 skill」、「review 這個 skill」時，進入優化模式。
+  當使用者說「資安稽核 skill」、「檢查 skill 安全性」、「這個 skill 安不安全」、「掃描有沒有惡意腳本／後門／外洩」時，進入資安稽核模式。
   不要用於修改 Skill 中特定的一兩行程式碼、一般程式開發、檔案整理，或任何與「製作／健檢 Skill」無關的任務（那些屬於一般編輯或開發工作）。
 metadata:
-  pattern: mode-router-create-or-optimize
+  pattern: mode-router-create-optimize-or-security-audit
   type: Skill Lifecycle Management
 ---
 
@@ -16,9 +17,9 @@ metadata:
 
 > **環境調適**：若當前環境提供結構化提問工具（如 AskUserQuestion），優先用它逐題詢問與確認；若不可用，才退回純文字提問並依規則手動列印進度標記。無論用哪種方式，「一次只問一題」的鐵律都不可違反。
 
-> **單一職責說明**：本技能涵蓋「建立」與「優化」兩種模式，因兩者同屬「Skill 生命週期管理」這一**單一職責**、且共用同一份 `style-guide.md` 與 `quality-checklist.md` 作為單一真相來源，不違反單一職責原則（詳見 `style-guide.md` §6 的生命週期例外）。注意：本技能**對外產出**的 Skill 仍須嚴格遵守「一個 Skill 只做一類事」。
+> **單一職責說明**：本技能涵蓋「建立」「優化」「資安稽核」三種模式，因同屬「Skill 生命週期管理」這一**單一職責**、且共用同一份 `style-guide.md` 作為規範真相（品質與資安檢查分別由 `quality-checklist.md`、`security-checklist.md` 承接），不違反單一職責原則（詳見 `style-guide.md` §6 的生命週期例外）。注意：本技能**對外產出**的 Skill 仍須嚴格遵守「一個 Skill 只做一類事」。
 
-> **漸進揭露（本技能自身的效率設計）**：兩種模式的完整流程分別抽到 `references/create-mode.md` 與 `references/optimize-mode.md`，在 Phase 0 判定模式後才載入對應的一份（建立模式若選 A2 藍本衍生，再額外載入 `references/blueprint-intake.md`），避免每次叫用都全載所有路徑。
+> **漸進揭露（本技能自身的效率設計）**：三種模式的完整流程分別抽到 `references/create-mode.md`、`references/optimize-mode.md` 與 `references/security-audit-mode.md`，在 Phase 0 判定模式後才載入對應的一份（建立模式若選 A2 藍本衍生，再額外載入 `references/blueprint-intake.md`），避免每次叫用都全載所有路徑。
 
 > **執行契約（多階段技能適用，每階段必做）**：每進入一個 Phase，先輸出一行狀態行，**至少含**：模式、進入的 Phase、上一階段放行條件是否滿足（未滿足則**禁止**前進）；可視情況再帶該階段的關鍵上下文（如已選範圍）。**格式不鎖死**，範例：`【建立模式・Phase 1 開始】`、`【優化模式・Phase O2 開始・已選範圍：全面健檢】`。此可見狀態行是防呆標記，能力較弱的模型也必須照印（理由詳見 Gotchas「依賴模型自律」）。簡單線性技能（只有 Step、無 Phase）免印。
 
@@ -32,7 +33,7 @@ interactive-skill-architect/
 │   ├── blueprint-intake.md               藍本入料 Phase B0-B2（建立選 A2 後載入）
 │   ├── optimize-mode.md                  優化模式 Phase O1-O3（Phase 0 選 B 後載入）
 │   ├── security-audit-mode.md            資安稽核模式 Phase S1-S3（Phase 0 選 C 後載入）
-│   ├── style-guide.md                    規範本體 §1-§12（三模式共用）
+│   ├── style-guide.md                    規範本體 §1-§13（三模式共用）
 │   ├── quality-checklist.md              13 項品質檢查（建立自審 1-7＋13、優化用全 13）
 │   └── security-checklist.md             4 維度資安檢查 SEC-1~4＋風險分級（資安模式與優化加掛共用）
 ├── assets/
@@ -42,6 +43,7 @@ interactive-skill-architect/
 │   ├── security-report-template.md       資安稽核模式風險分級報告格式
 │   └── examples/                         7 個靈感範例（5 模式範例＋1 優化報告＋1 資安報告）
 └── scripts/
+    ├── _shared.py                        共用常數/工具（BINARY_EXTS、二進位嗅探、SHA256；兩支腳本單一真相）
     ├── validate-skill.py                 機械項確定性驗證（唯讀；三模式皆可呼叫）
     └── scan-security.py                  資安 pattern 初篩（唯讀；資安模式與優化加掛呼叫）
 ```

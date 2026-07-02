@@ -49,6 +49,14 @@ Step 2: {{步驟描述}}。
 {{【選用】若本 Skill 結束時會輸出結果統計／彙總報告：依 style-guide.md §10，在 assets/ 建立 `result-report-template.md`，並在產出統計的步驟旁綁定載入，例如：}}
 {{  Step N: 將結果依 `assets/result-report-template.md` 彙整為報告後交付。}}
 
+{{【選用・資產清單】僅當本 Skill 必須附帶二進位（.exe／.dll／模型檔等）時才加；否則刪除本節（依 security-checklist.md SEC-4）。每個二進位須記錄來源、用途與 SHA256，供身分驗證與掉包偵測：}}
+
+## 資產清單 (Asset Manifest)
+
+| 二進位檔 | 來源/出處 | 用途 | SHA256 |
+|---------|----------|------|--------|
+| `{{path}}` | {{來源／官方連結}} | {{一句用途}} | `{{sha256}}` |
+
 ## Gotchas (踩過的坑)
 
 > [!WARNING]
