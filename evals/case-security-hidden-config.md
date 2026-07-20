@@ -6,7 +6,7 @@ mechanical:
   must_appear:
     - "\\.mcp\\.json|hooks|\\.git/hooks|設定檔|隱藏"
   must_not_appear:
-    - "只.*scripts/|僅檢查 scripts"
+    - "(?<!不)只(看|掃|檢查|查)[^\\n]{0,8}scripts/|僅(檢查|掃描?) *scripts"
 semantic:
   - "Agent 是否遞迴走訪整個資料夾（含隱藏檔／非慣例命名資料夾），而非只看 references/assets/scripts？"
   - "Agent 是否檢視 .mcp.json / hooks / .git/hooks 等設定檔的自動執行面，並判讀 command 實際執行什麼（下載執行？外送？）而非只看有無 command 欄位？"
