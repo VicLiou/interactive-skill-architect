@@ -26,8 +26,12 @@ scan-security.py — 對一個 Skill 資料夾做「確定性」的資安 patter
   - 已知限制（見檔尾與 security-audit-mode.md Gotchas）：逐行比對，無法偵測
     跨行拆分／整段編碼混淆的 payload；二進位內容本身無法掃描（僅出指紋）。
 
-由 interactive-skill-architect 的資安稽核模式（Phase S1 初篩／Phase S3 回歸掃描）與
-優化模式全面健檢加掛資安時呼叫；環境無法執行時退回人工逐檔審。
+由 interactive-skill-architect 的資安稽核模式（Phase S1 初篩／Phase S3 回歸掃描）呼叫；
+環境無法執行時退回人工逐檔審。
+
+降噪：對「命中密度極高且橫跨多維度」的檔（多為資安 checklist／掃描規則／稽核報告等
+      描述而非執行危險行為的自指涉文件），改為整檔聚合一行提示而非逐條列印，交人工整檔
+      判讀。此為顯示形態調整——總命中數、退出碼、待複核旗標皆不變，不遺漏任何命中。
 """
 import sys, os, re
 sys.dont_write_bytecode = True   # 唯讀承諾（§13.2）：禁止 import 產生 __pycache__，須在 import _shared 之前設定
@@ -206,15 +210,39 @@ def main():
         print("未命中任何可疑 pattern。仍須 Agent 完成 SEC-1~SEC-4 語意複核（尤其 SEC-3 文本注入與整段編碼混淆，掃描器可能漏報）。")
         return 1 if need_review else 0
 
+    # 降噪（不降敏）：資安文件本身（checklist、掃描規則、稽核報告）必然大量「自命中」——
+    # 它們**描述**危險 pattern 而非**執行**。逐條列印會淹沒真正的訊號。
+    # 對「命中密度極高且橫跨多維度」的檔，改為整檔聚合一行提示，交人工整檔判讀。
+    # 這只改變「顯示形態」：總命中數、exit code、need_review 全部不變，不遺漏任何命中。
+    # 門檻刻意訂高（避免把真 payload 檔誤收），且聚合檔仍明確要求人工整檔閱讀。
+    DENSE_MIN_HITS, DENSE_MIN_DIMS = 15, 3
+    per_file = {}
+    for h in hits:
+        per_file.setdefault(h[3], []).append(h)
+    dense = {rel: hs for rel, hs in per_file.items()
+             if len(hs) >= DENSE_MIN_HITS and len({x[0] for x in hs}) >= DENSE_MIN_DIMS}
+
+    if dense:
+        print("⚠ 高密度命中檔（命中數多且橫跨多維度，疑為資安文件／pattern 定義／稽核報告）：")
+        print("    這類檔通常在「描述」而非「執行」危險行為，屬預期的自命中；已聚合，請**整檔人工判讀**確認無真實 payload。")
+        for rel in sorted(dense):
+            hs = dense[rel]
+            dims = ",".join(sorted({x[0] for x in hs}))
+            print("    " + rel + "  （" + str(len(hs)) + " 命中，橫跨 " + dims + "）")
+        print("")
+
     for dim in ("SEC-1", "SEC-2", "SEC-3", "SEC-4"):
-        dh = [h for h in hits if h[0] == dim]
+        dh = [h for h in hits if h[0] == dim and h[3] not in dense]
         if not dh:
             continue
-        print("[" + dim + "] " + str(len(dh)) + " 命中")
+        print("[" + dim + "] " + str(len(dh)) + " 命中（不含高密度聚合檔）")
         for _, name, hint, rel, ln, txt in dh:
             print("  - (" + hint + ") " + name + " @ " + rel + ":" + str(ln))
             print("      " + txt)
-    print("\n-- 共 " + str(len(hits)) + " 個可疑命中；初判提示僅供參考，最終分級由 Agent 裁定 --")
+
+    dense_hits = sum(len(hs) for hs in dense.values())
+    tail = "" if not dense else ("（其中 " + str(dense_hits) + " 個來自 " + str(len(dense)) + " 個高密度聚合檔，見上）")
+    print("\n-- 共 " + str(len(hits)) + " 個可疑命中" + tail + "；初判提示僅供參考，最終分級由 Agent 裁定 --")
     return 1
 
 

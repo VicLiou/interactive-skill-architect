@@ -8,8 +8,9 @@ validate-skill.py — 對一個 Skill 資料夾做「確定性」的機械檢查
 退出碼: 0 = 無 FAIL；1 = 有 FAIL；2 = 執行錯誤（如路徑不存在）。
 
 範圍: 只做機械可判定項（編碼/NUL/截斷、kebab-case、name＝資料夾、YAML、
-      description、Gotchas 結構、孤兒檔）。語意項（量身打造、Gotchas 覆蓋率、
-      步驟邏輯一致性）仍須由 Agent 判斷——本工具不取代語意審查。
+      description、Gotchas 結構、孤兒檔、懸空引用、體積預算）。語意項（量身打造、
+      Gotchas 覆蓋率、步驟邏輯一致性）仍須由 Agent 判斷——本工具不取代語意審查。
+      孤兒檔＝檔案存在但沒被任何 .md 引用；懸空引用＝.md 承諾載入但檔案不存在（互為反向）。
 
 由 interactive-skill-architect 的建立模式（Phase 4／寫入後）與優化模式
 （Phase O1 預檢／Phase O3 放行前）呼叫；環境無法執行時退回人工檢查。
@@ -118,17 +119,57 @@ def main():
         "Gotchas 結構", "; ".join(g) or "WARNING 區塊與迭代註腳齊全")
 
     # 5. 孤兒檔偵測（references/assets/scripts 下的檔是否被任一 .md 提及）
-    md = "\n".join(open(p, encoding="utf-8", errors="replace").read()
-                   for p in files if p.endswith(".md"))
+    #    先剝除 HTML 註解，避免「只在 <!-- ... --> 註解裡被提及」被誤算成有效引用。
+    raw_md = "\n".join(open(p, encoding="utf-8", errors="replace").read()
+                       for p in files if p.endswith(".md"))
+    md = re.sub(r"<!--.*?-->", "", raw_md, flags=re.S)   # 註解不算引用
     orphans = []
     META_FILES = {"SKILL.md", "LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE", "README.md"}  # 慣例後設檔不算孤兒
+    # 以 glob 樣式（如 `case-*.md`）集體引用的資料夾（fixture/資料集），成員不逐一具名，不算孤兒。
+    glob_refd = re.findall(r"([A-Za-z0-9._/-]*\*[A-Za-z0-9._/-]*\.[A-Za-z0-9]+)", md)
+    glob_rx = [re.compile("^" + re.escape(g).replace(r"\*", "[^/]*") + "$") for g in glob_refd]
     for p in files:
         rel = os.path.relpath(p, target).replace(os.sep, "/")
         if rel in META_FILES: continue
-        if os.path.basename(p) not in md and rel not in md:
-            orphans.append(rel)
+        if os.path.basename(p) in md or rel in md: continue
+        if any(rx.match(rel) or rx.match(os.path.basename(p)) for rx in glob_rx): continue  # 被 glob 集體引用
+        orphans.append(rel)
     add("WARN" if orphans else "PASS", "孤兒檔偵測",
-        ("未被任何 .md 引用: " + ", ".join(orphans)) if orphans else "無孤兒檔")
+        ("未被任何 .md 引用（不含註解內提及）: " + ", ".join(orphans)) if orphans else "無孤兒檔")
+
+    # 5b. 懸空引用偵測（dangling reference）：檔案承諾「載入／執行」某檔，但該檔實際不存在。
+    #     比孤兒檔更危險——Agent 執行時會載入失敗。
+    #     為避免誤報，只在兩個條件同時成立時才判懸空：
+    #       (a) 路徑出現在**載入語境**（同行含 載入/引用/依/跑/執行/python3 等動詞），
+    #           排除純示意的「如 xxx.md」「例如」列舉；
+    #       (b) 來源檔**不是** assets/examples/**（示範用的假 skill）或 *template*（含佔位路徑）。
+    #     這兩類檔合法地含有「別的 skill 的」或「佔位的」路徑，不該當成本 skill 的承諾。
+    #     另兩個示意來源也須排除：``` 圍籬碼區塊內的**格式示例**、以及緊接在
+    #     「如／例如／比如」後的**舉例路徑**——這些是規範文件在示範寫法，不是真實載入承諾。
+    present = {os.path.relpath(p, target).replace(os.sep, "/") for p in files}
+    LOAD_KW = re.compile(r"載入|引用|讀取|依\s*`|跑\s*`|執行|python3|見\s*`")
+    path_rx = re.compile(r"(?:references|assets|scripts)/[A-Za-z0-9._/-]+\.(?:md|py|sh|txt|json|ya?ml)")
+    ILLUS = re.compile(r"(如|例如|比如|像|類似)\s*`?\s*$")   # 路徑前是舉例語 → 示意，非承諾
+    dangling = set()
+    for p in files:
+        rel = os.path.relpath(p, target).replace(os.sep, "/")
+        if not rel.endswith(".md"): continue
+        if rel.startswith("assets/examples/") or "template" in os.path.basename(rel):
+            continue
+        body = open(p, encoding="utf-8", errors="replace").read()
+        body = re.sub(r"<!--.*?-->", "", body, flags=re.S)   # 註解
+        body = re.sub(r"```.*?```", "", body, flags=re.S)     # 圍籬碼內的格式示例
+        for line in body.splitlines():
+            if not LOAD_KW.search(line): continue
+            for mm in path_rx.finditer(line):
+                m = mm.group(0)
+                if re.search(r"[{}<>*]", m): continue         # 佔位路徑
+                if ILLUS.search(line[:mm.start()]): continue  # 「如 xxx」舉例
+                if m not in present:
+                    dangling.add(m)
+    dangling = sorted(dangling)
+    add("FAIL" if dangling else "PASS", "懸空引用偵測",
+        ("承諾載入但不存在的檔案: " + ", ".join(dangling)) if dangling else "無懸空引用")
 
     # 6. 體積預算（數字依 style-guide §12，為單一真相；改動需同步 §12）
     #    SKILL.md 為每次必載入口，最嚴；references 按需載入，放寬；assets/scripts 不計入。
