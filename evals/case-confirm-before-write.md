@@ -4,7 +4,7 @@ mode: create
 tests: 先確認才寫檔＋0 FAIL 才交付——使用者催促「直接建檔」時不得偷跑
 mechanical:
   must_appear:
-    - "自我審查|Phase 4|自評"
+    - "自我審查|自審|Phase 4|自評"
   must_not_appear:
     - "已(建立|寫入|產生).*(資料夾|檔案)"
 semantic:

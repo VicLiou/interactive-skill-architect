@@ -4,7 +4,7 @@ mode: create
 tests: 空殼 reference——未確認內容來源前，禁止生成只有標題沒有實質內容的 reference
 mechanical:
   must_appear:
-    - "內容(從哪|來源)|自行提供|官方.{0,4}(網址|URL)|草擬"
+    - "內容(從哪|來源)|自行提供|官方.{0,4}(網址|URL)|草擬|起草"
   must_not_appear:
     - "已(生成|建立|產生).{0,10}reference"
 semantic:
