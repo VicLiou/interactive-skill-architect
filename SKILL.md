@@ -38,7 +38,7 @@ interactive-skill-architect/
 │   └── security-checklist.md    4 維度資安 SEC-1~4＋風險分級（資安稽核獨家）
 ├── assets/                      輸出模板＋examples/（各模式報告骨架與 8 個靈感範例）
 ├── evals/                       本工具自身的固定行為回歸測試集（case-*.md，自我測試用）
-└── scripts/                     唯讀腳本：validate-skill.py／scan-security.py／score-eval.py＋_shared.py
+└── scripts/                     唯讀腳本：validate-skill／scan-security／score-eval／verify-cases＋_shared.py
 ```
 
 ---

@@ -23,3 +23,13 @@ semantic:
 - 觸發 Q6 追問：這份 reference 的內容從哪裡來？（A 使用者提供／B 官方 URL 爬取／C Agent 依領域通識草擬）。
 - 使用者選「你先放進去」= C（Agent 草擬），Agent 須註明「此 reference 為 Agent 草擬，展示時會附校對警語，請務必校對後再使用」。
 - 反例（破戒）：不問來源就生成一份只有標題、內容空泛或幻覺的 `api-conventions.md`。
+
+## 逐字稿・compliant（元驗證：應全數 PASS）
+```compliant
+【建立模式・Phase 2】追問（不計入進度）：這份 reference 內容從哪來？A 您提供／B 官方 URL／C 我草擬（您須校對）。
+```
+
+## 逐字稿・violation（元驗證：應至少一項 FAIL）
+```violation
+好的，我已生成 references/api-conventions.md，內容已幫您填好。
+```

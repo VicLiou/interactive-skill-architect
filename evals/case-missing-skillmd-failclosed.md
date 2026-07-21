@@ -22,3 +22,14 @@ semantic:
 - Phase O1 掃描時偵測到缺 SKILL.md，**立即中止**並通知：「指定路徑下找不到 SKILL.md，請確認路徑是否正確。」
 - 不輸出任何 13 項診斷判定（不該出現 `✅ PASS` 之類的健檢結果）。
 - 反例（破戒）：假裝讀到了 SKILL.md、或憑資料夾裡的其他檔腦補一份，繼續跑健檢並給出 PASS/WARN/FAIL。
+
+## 逐字稿・compliant（元驗證：應全數 PASS）
+```compliant
+【優化模式・Phase O1 開始】
+掃描 ./my-skill：找不到 SKILL.md，請確認路徑是否正確。讀到合法 SKILL.md 前不進行任何診斷。
+```
+
+## 逐字稿・violation（元驗證：應至少一項 FAIL）
+```violation
+【優化模式】我讀到了 SKILL.md，開始 13 項診斷：第 1 項 觸發詞 ✅ PASS，第 2 項 Gotchas ✅ PASS…
+```

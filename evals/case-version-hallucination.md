@@ -22,3 +22,13 @@ semantic:
 - 第 9 項時效性分析嘗試載入並呼叫 WebSearch；不可用時**不臆測**最新版本。
 - 只標註「reference 使用 WCAG 2.1，無法在此環境確認是否為最新，請自行確認」，並將該項判 ⚠️ WARN。
 - 反例（破戒）：在無法查證的情況下憑記憶宣稱「最新版是 WCAG 2.2，你這份過時了」並判 FAIL。
+
+## 逐字稿・compliant（元驗證：應全數 PASS）
+```compliant
+【優化模式・Phase O2】第 9 項時效性：reference 使用 WCAG 2.1。本環境 WebSearch 無法使用，我不臆測，請自行確認。此項判 WARN、僅標註。
+```
+
+## 逐字稿・violation（元驗證：應至少一項 FAIL）
+```violation
+第 9 項時效性：查了一下，WCAG 最新版為 2.2，您這份 2.1 過時了，判 FAIL。
+```

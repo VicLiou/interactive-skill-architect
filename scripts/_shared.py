@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""_shared.py — validate-skill.py 與 scan-security.py 的共用常數與工具（單一真相，避免兩處漂移）。
+"""_shared.py — scripts/ 的共用常數與工具（單一真相，避免多處漂移）。
 
 唯讀、無副作用：本模組只讀檔與計算，不寫入/刪除任何檔案（呼應 style-guide.md §13.2）。
-內容：二進位判定（內容嗅探為主、副檔名為輔，§13.4）、SHA256 指紋（SEC-4）、資源上限常數（§13.3）。
+內容：
+  - 二進位判定（內容嗅探為主、副檔名為輔，§13.4）、SHA256 指紋（SEC-4）、資源上限常數（§13.3）
+    —— validate-skill.py 與 scan-security.py 共用。
+  - eval 機械項解析與評分（parse_mechanical／score_mechanical）
+    —— score-eval.py 與 verify-cases.py 共用；確定性，無網路/LLM/時間相依（§13.4）。
 """
-import os, hashlib
+import os, re, hashlib
 
 # 單檔最多讀 10MB，避免超大檔造成 DoS（§13.3 資源上限）
 MAX_BYTES = 10 * 1024 * 1024
@@ -68,3 +72,64 @@ def sha256_of(path):
     except Exception:
         return None
     return h.hexdigest()
+
+
+# ---------- eval 機械項（score-eval.py 與 verify-cases.py 共用；確定性、無副作用）----------
+
+def parse_mechanical(case_text):
+    """從 case frontmatter 抽出 mechanical 的三個清單。極簡 YAML 子集解析，不依賴 pyyaml。
+
+    回傳 {"must_appear": [...], "must_not_appear": [...], "ordering": [(a,b),...]}；
+    無 frontmatter 或無 mechanical 區塊回傳 None。
+    """
+    m = re.match(r"^---\s*\n(.*?)\n---", case_text, re.S)
+    if not m:
+        return None
+    fm = m.group(1)
+    mb = re.search(r"^mechanical:\s*\n(.*?)(?=^\S|\Z)", fm + "\n", re.S | re.M)
+    if not mb:
+        return None
+    block = mb.group(1)
+    out = {"must_appear": [], "must_not_appear": [], "ordering": []}
+    cur = None
+    for line in block.splitlines():
+        key = re.match(r"\s{2}(must_appear|must_not_appear|ordering):\s*$", line)
+        if key:
+            cur = key.group(1)
+            continue
+        item = re.match(r"\s{4}-\s*(.+?)\s*$", line)
+        if item and cur:
+            val = item.group(1).strip()
+            if val.startswith("#"):
+                continue                       # 註解行，跳過
+            if cur == "ordering":
+                pair = re.findall(r'"([^"]*)"|\'([^\']*)\'|([^\[\],]+)', val)
+                flat = [a or b or c for a, b, c in pair if (a or b or c).strip()]
+                if len(flat) >= 2:
+                    out["ordering"].append((flat[0].strip(), flat[1].strip()))
+            else:
+                out[cur].append(val.strip().strip('"').strip("'"))
+    return out
+
+
+def score_mechanical(mech, transcript):
+    """對逐字稿套用 mechanical 斷言，回傳 [(ok, label, detail), ...]（確定性）。"""
+    results = []
+    for pat in mech["must_appear"]:
+        ok = re.search(pat, transcript) is not None
+        results.append((ok, "must_appear", pat + ("" if ok else "  ← 未出現")))
+    for pat in mech["must_not_appear"]:
+        hit = re.search(pat, transcript)
+        results.append((hit is None, "must_not_appear",
+                        pat + ("" if hit is None else "  ← 不該出現卻出現: " + hit.group(0)[:60])))
+    for a, b in mech["ordering"]:
+        ia, ib = transcript.find(a), transcript.find(b)
+        ok = ia != -1 and ib != -1 and ia < ib
+        results.append((ok, "ordering", a + " → " + b + ("" if ok else "  ← 順序錯誤或缺項")))
+    return results
+
+
+def extract_transcript(case_text, tag):
+    """從 case .md 抽出 ```<tag> ... ``` fenced 區塊內容（compliant／violation）；無則回傳 None。"""
+    m = re.search(r"```" + re.escape(tag) + r"\s*\n(.*?)```", case_text, re.S)
+    return m.group(1) if m else None

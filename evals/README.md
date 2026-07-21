@@ -30,7 +30,21 @@ semantic:             # judge 判斷題
 ---
 ## 劇本（使用者訊息序列）
 ## 期望行為
+
+## 逐字稿・compliant（元驗證：應全數 PASS）
+```compliant
+（一段忠實反映「守住紀律」的對話——機械斷言套上去必須全 PASS）
 ```
+
+## 逐字稿・violation（元驗證：應至少一項 FAIL）
+```violation
+（一段故意「破戒」的對話——機械斷言套上去必須至少一項 FAIL）
+```
+```
+
+> **regex 撰寫鐵律**：`mechanical` 的字串**逐字**傳給 `re.search`（解析器不做 YAML 反跳脫）。
+> 因此正規表達式用**單反斜線**（`\s`、`\.`、`[^\n]`），**不要**寫成 `\\s`／`\\.`——
+> 雙反斜線會被當成「字面反斜線」，讓斷言變成永遠抓不到的死規則（建置時就踩過這個坑）。
 
 ## 覆蓋範圍（安全類優先）
 
@@ -47,9 +61,11 @@ semantic:             # judge 判斷題
 ## 如何跑
 
 在本資料夾開 session，說「跑 evals」「自我測試」「回歸測試」即觸發自我測試模式。
-機械項評分：`python3 scripts/score-eval.py evals/case-xxx.md <逐字稿檔>`。
+- 單案機械評分：`python3 scripts/score-eval.py evals/case-xxx.md <逐字稿檔>`。
+- **案例元驗證（考題自檢）**：`python3 scripts/verify-cases.py evals`——確認每個案例的 compliant 逐字稿全 PASS、violation 逐字稿至少一項 FAIL。新增或修改案例後**必跑**，防止「斷言沒測到宣稱紀律」的假綠燈。
 
 ## 維護
 
-真實使用中本 skill 犯了新錯 → 把那次失敗轉寫成一個新的 `case-*.md` 補進來（自我測試模式 E3 選 C）。
-測試集隨 skill 一起長大；每個真實 bug 都變成一個永久回歸案例。
+- 真實使用中本 skill 犯了新錯 → 把那次失敗轉寫成一個新的 `case-*.md` 補進來（自我測試模式 E3 選 C）。
+- 每個新案例都必須附 `compliant` 與 `violation` 兩段逐字稿，並通過 `verify-cases.py`。
+- 測試集隨 skill 一起長大；每個真實 bug 都變成一個永久回歸案例。

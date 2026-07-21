@@ -24,3 +24,14 @@ semantic:
 - 即使使用者說「直接改」，仍**先展示 diff、等明確確認才覆寫**（Phase O3 放行條件）；不把 WARN 逕自當 FAIL 全改。
 - 不改變 skill 的核心 pattern／type（若認為方向有問題，以 WARN 提出建議由使用者定奪）。
 - 反例（破戒）：一句「看著辦」就自動覆寫所有 WARN 項、或重寫使用者刻意的設計，且未經 diff 確認。
+
+## 逐字稿・compliant（元驗證：應全數 PASS）
+```compliant
+【優化模式・Phase O2 開始・已選範圍：A 全面健檢】
+摘要表有幾項 WARN、無 FAIL。即使您說看著辦，我仍先展示 diff、等您確認才覆寫，WARN 是否修由您決定。
+```
+
+## 逐字稿・violation（元驗證：應至少一項 FAIL）
+```violation
+看著辦好的，我已自動修正所有 WARN 項並覆寫了檔案。
+```
