@@ -18,9 +18,7 @@ metadata:
 
 > **環境調適**：若當前環境提供結構化提問工具（如 AskUserQuestion），優先用它逐題詢問與確認；若不可用，才退回純文字提問並依規則手動列印進度標記。無論用哪種方式，「一次只問一題」的鐵律都不可違反。
 
-> **單一職責說明**：本技能涵蓋「建立」「優化」「資安稽核」「自我測試」四種模式，因同屬「Skill 生命週期管理」這一**單一職責**、且共用同一份 `style-guide.md` 作為規範真相（品質與資安檢查分別由 `quality-checklist.md`、`security-checklist.md` 承接），不違反單一職責原則（詳見 `style-guide.md` §6 的生命週期例外）。注意：本技能**對外產出**的 Skill 仍須嚴格遵守「一個 Skill 只做一類事」。
-
-> **漸進揭露（本技能自身的效率設計）**：四種模式的完整流程分別抽到 `references/create-mode.md`、`references/optimize-mode.md`、`references/security-audit-mode.md` 與 `references/eval-mode.md`，在 Phase 0 判定模式後才載入對應的一份（建立模式若選 A2 藍本衍生，再額外載入 `references/blueprint-intake.md`），避免每次叫用都全載所有路徑。
+> **單一職責與漸進揭露**：四種模式同屬「Skill 生命週期管理」這一**單一職責**、共用 `style-guide.md` 為規範真相（正當性詳見其 §6 生命週期例外）；各模式完整流程外置到對應 mode 檔，Phase 0 判定後才載入一份（見下方路由）。注意：本技能**對外產出**的 Skill 仍須嚴守「一個 Skill 只做一類事」。
 
 > **執行契約（多階段技能適用，每階段必做）**：每進入一個 Phase，先輸出一行狀態行，**至少含**：模式、進入的 Phase、上一階段放行條件是否滿足（未滿足則**禁止**前進）；可視情況再帶該階段的關鍵上下文（如已選範圍）。**格式不鎖死**，範例：`【建立模式・Phase 1 開始】`、`【優化模式・Phase O2 開始・已選範圍：全面健檢】`。此可見狀態行是防呆標記，能力較弱的模型也必須照印（理由詳見 Gotchas「依賴模型自律」）。簡單線性技能（只有 Step、無 Phase）免印。
 
@@ -28,31 +26,19 @@ metadata:
 
 ```
 interactive-skill-architect/
-├── SKILL.md                              入口：角色＋Phase 0 路由＋通用 Gotchas
-├── references/
-│   ├── create-mode.md                    建立模式 Phase 1-4（含來源選擇 A1 從零／A2 藍本）
-│   ├── blueprint-intake.md               藍本入料 Phase B0-B2（建立選 A2 後載入）
-│   ├── optimize-mode.md                  優化模式 Phase O1-O3（Phase 0 選 B 後載入）
-│   ├── security-audit-mode.md            資安稽核模式 Phase S1-S3（Phase 0 選 C 後載入）
-│   ├── eval-mode.md                      自我測試模式 Phase E1-E3（Phase 0 選 D 後載入）
-│   ├── style-guide.md                    規範本體 §1-§13（各模式共用）
-│   ├── quality-checklist.md              13 項品質檢查（建立自審 1-7＋13、優化用全 13）
-│   └── security-checklist.md             4 維度資安檢查 SEC-1~4＋風險分級（資安稽核模式獨家承接）
-├── assets/
-│   ├── skill-template.md                 產出新 Skill 的主要骨架
-│   ├── self-review-report-template.md    建立模式 8 項自審輸出格式（1-7＋13）
-│   ├── optimization-report-template.md   優化模式 13 項診斷輸出格式
-│   ├── security-report-template.md       資安稽核模式風險分級報告格式
-│   ├── eval-report-template.md           自我測試模式成績單格式
-│   └── examples/                         8 個靈感範例（5 模式範例＋優化／資安／eval 報告各 1）
-├── evals/                                本工具自身的固定行為回歸測試集（自我測試模式用）
-│   ├── README.md                         案例格式與維護說明
-│   └── case-*.md                         5 個反向攻擊紀律的情境案例
-└── scripts/
-    ├── _shared.py                        共用常數/工具（BINARY_EXTS、二進位嗅探、SHA256；腳本單一真相）
-    ├── validate-skill.py                 機械項確定性驗證（唯讀；含孤兒檔／懸空引用互為反向）
-    ├── scan-security.py                  資安 pattern 初篩（唯讀；資安稽核模式呼叫）
-    └── score-eval.py                     eval 機械項確定性評分（唯讀；自我測試模式呼叫）
+├── SKILL.md                     入口：角色＋Phase 0 路由＋通用 Gotchas
+├── references/                  按需載入的規範與流程（各 mode 檔＋共用 style-guide/quality/security）
+│   ├── create-mode.md           建立 Phase 1-4（A1 從零／A2 藍本）
+│   ├── blueprint-intake.md      藍本入料 B0-B2（建立選 A2 後載入）
+│   ├── optimize-mode.md         優化 Phase O1-O3
+│   ├── security-audit-mode.md   資安稽核 Phase S1-S3
+│   ├── eval-mode.md             自我測試 Phase E1-E3
+│   ├── style-guide.md           規範本體 §1-§13（各模式共用）
+│   ├── quality-checklist.md     13 項品質檢查（建立自審 1-7＋13、優化全 13）
+│   └── security-checklist.md    4 維度資安 SEC-1~4＋風險分級（資安稽核獨家）
+├── assets/                      輸出模板＋examples/（各模式報告骨架與 8 個靈感範例）
+├── evals/                       本工具自身的固定行為回歸測試集（case-*.md，自我測試用）
+└── scripts/                     唯讀腳本：validate-skill.py／scan-security.py／score-eval.py＋_shared.py
 ```
 
 ---
@@ -74,9 +60,7 @@ interactive-skill-architect/
 - 選 **C（資安稽核）** → 載入 `references/security-audit-mode.md`，依其 Phase S1~Phase S3 執行。
 - 選 **D（自我測試）** → 載入 `references/eval-mode.md`，依其 Phase E1~Phase E3 執行（被測物是本 skill 自己，只出成績單、不改流程檔）。
 
-四種模式都共用 `references/style-guide.md`（規範本體）；建立與優化共用 `references/quality-checklist.md`（品質檢查），資安稽核獨家使用 `references/security-checklist.md`（資安檢查），自我測試使用 `evals/` 案例集與 `scripts/score-eval.py`。模式檔會在需要的步驟指明何時載入這些共用檔。
-
-> **職責界定**：資安稽核是「健檢」職責的**資安專門切面**、自我測試是「品質保證」的**回歸驗證切面**，皆與建立／優化同屬 Skill 生命週期管理，因此四模式共用同一套風格與品質真相、不違反單一職責（詳見 `style-guide.md` §6 生命週期例外）。差別在**輸出**：優化用 PASS/WARN/FAIL 談「品質」，資安稽核用 Critical/High/Medium/Low 談「風險」，自我測試用通過率與逐案守/破談「行為回歸」，故各自獨立成一條入口與一份報告模板。
+四種模式共用 `style-guide.md`（規範本體）；建立與優化共用 `quality-checklist.md`，資安稽核獨家用 `security-checklist.md`，自我測試用 `evals/` 與 `score-eval.py`。各模式輸出格式不同（優化 PASS/WARN/FAIL、資安 Critical~Low、自我測試通過率），故各自獨立成一條入口與一份報告模板；模式檔會在需要的步驟指明何時載入共用檔。
 
 ---
 

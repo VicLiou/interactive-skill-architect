@@ -124,13 +124,14 @@ def main():
                        for p in files if p.endswith(".md"))
     md = re.sub(r"<!--.*?-->", "", raw_md, flags=re.S)   # 註解不算引用
     orphans = []
-    META_FILES = {"SKILL.md", "LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE", "README.md"}  # 慣例後設檔不算孤兒
+    META_FILES = {"SKILL.md", "LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE"}  # 慣例後設檔不算孤兒
     # 以 glob 樣式（如 `case-*.md`）集體引用的資料夾（fixture/資料集），成員不逐一具名，不算孤兒。
     glob_refd = re.findall(r"([A-Za-z0-9._/-]*\*[A-Za-z0-9._/-]*\.[A-Za-z0-9]+)", md)
     glob_rx = [re.compile("^" + re.escape(g).replace(r"\*", "[^/]*") + "$") for g in glob_refd]
     for p in files:
         rel = os.path.relpath(p, target).replace(os.sep, "/")
-        if rel in META_FILES: continue
+        base = os.path.basename(p)
+        if rel in META_FILES or base == "README.md": continue  # README 自我說明其所在資料夾，非被載入的 reference
         if os.path.basename(p) in md or rel in md: continue
         if any(rx.match(rel) or rx.match(os.path.basename(p)) for rx in glob_rx): continue  # 被 glob 集體引用
         orphans.append(rel)
