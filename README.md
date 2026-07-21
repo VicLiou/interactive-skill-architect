@@ -6,18 +6,19 @@
 
 ---
 
-## 四種模式（Phase 0 依使用者意圖路由）
+## 三種對外模式（Phase 0 依使用者意圖路由）
 
 | 模式 | 用途 | 觸發詞範例 | 輸出 |
 |------|------|-----------|------|
 | **A. 建立**（create） | 透過 Q1~Q6 結構化訪談從零打造新 skill；A1 從零／A2 以既有 skill 為藍本衍生 | 「建立 skill」「寫一個 skill」「設計新技能」 | 一個全新的 skill 資料夾 |
 | **B. 優化**（optimize） | 對既有 skill 做 13 項品質診斷與修正 | 「優化 skill」「skill 健檢」「review 這個 skill」 | PASS/WARN/FAIL 診斷報告＋修正 diff |
 | **C. 資安稽核**（security-audit） | 4 維度資安檢查、找惡意腳本／憑證外洩／Prompt Injection／越權外送並分級 | 「資安稽核 skill」「掃描有沒有後門／外洩」 | Critical/High/Medium/Low 風險報告 |
-| **D. 自我測試**（eval） | 對本工具自己跑 evals 行為回歸測試 | 「跑 evals」「自我測試」「回歸測試」 | 逐案守/破成績單 |
 
-共用真相：四模式共用 `references/style-guide.md`（規範本體）；建立與優化共用 `quality-checklist.md`，資安稽核獨家用 `security-checklist.md`，自我測試用 `evals/` 與 `score-eval.py`。
+> **維護者工具（非使用者模式，已封存）**：另有一套「自我測試」回歸機制（`references/eval-mode.md`＋`evals/`＋`scripts/score-eval.py`／`verify-cases.py`），用來驗證本工具自身的閘門與 gotcha 有沒有退化。它**不在 Phase 0 對外路由**、不由使用者觸發，僅供維護本工具的人在改動流程檔後手動執行。
 
-> **對外產出的 skill 仍須單一職責**：本工具因同屬「Skill 生命週期管理」而例外地涵蓋四模式；但它**產出**的 skill 必須嚴守「一個 skill 只做一類事」。
+共用真相：三種對外模式共用 `references/style-guide.md`（規範本體）；建立與優化共用 `quality-checklist.md`，資安稽核獨家用 `security-checklist.md`。
+
+> **對外產出的 skill 仍須單一職責**：本工具因同屬「Skill 生命週期管理」而例外地涵蓋多種模式；但它**產出**的 skill 必須嚴守「一個 skill 只做一類事」。
 
 ---
 
@@ -28,7 +29,6 @@
 - 「幫我建一個把會議逐字稿整理成紀要的 skill」→ 進入建立模式，逐題訪談。
 - 「健檢 D:\path\to\some-skill」→ 進入優化模式。
 - 「資安稽核 D:\path\to\some-skill」→ 進入資安稽核模式。
-- 「跑 evals」→ 進入自我測試模式。
 
 意圖模糊時，它會先在 Phase 0 問你要走哪個模式，不會擅自開工。
 
@@ -44,8 +44,8 @@ interactive-skill-architect/
 │   ├── blueprint-intake.md         藍本入料 B0-B2（建立選 A2 後載入）
 │   ├── optimize-mode.md            優化模式 Phase O1-O3
 │   ├── security-audit-mode.md      資安稽核模式 Phase S1-S3
-│   ├── eval-mode.md                自我測試模式 Phase E1-E3
-│   ├── style-guide.md              規範本體 §1-§13（四模式共用）
+│   ├── eval-mode.md                ★維護者工具：自我測試 Phase E1-E3（非使用者模式）
+│   ├── style-guide.md              規範本體 §1-§13（各模式共用）
 │   ├── quality-checklist.md        13 項品質檢查
 │   └── security-checklist.md       4 維度資安檢查 SEC-1~4＋風險分級
 ├── assets/                         輸出模板
@@ -53,18 +53,20 @@ interactive-skill-architect/
 │   ├── self-review-report-template.md
 │   ├── optimization-report-template.md
 │   ├── security-report-template.md
-│   ├── eval-report-template.md
+│   ├── eval-report-template.md     （★維護者 eval 用）
 │   └── examples/                   靈感範例＋各模式報告範例
-├── evals/                          本工具自身的固定行為回歸測試集
+├── evals/                          ★維護者工具：本工具自身的固定行為回歸測試集
 │   ├── README.md                   案例格式與撰寫鐵律
 │   └── case-*.md                   14 個反向攻擊紀律的情境案例
 └── scripts/                        唯讀腳本（確定性、無網路/LLM/時間相依）
     ├── _shared.py                  共用常數與評分邏輯（單一真相）
     ├── validate-skill.py           機械項驗證：編碼／命名／孤兒檔／懸空引用／體積預算
     ├── scan-security.py            資安 pattern 初篩（跨 Unix/Windows/多語言/設定檔）
-    ├── score-eval.py               eval 機械項評分
-    └── verify-cases.py             eval 案例元驗證（防「假綠燈」）
+    ├── score-eval.py               ★維護者 eval：機械項評分
+    └── verify-cases.py             ★維護者 eval：案例元驗證（防「假綠燈」）
 ```
+
+（標 ★ 者為**維護本工具自身**用的回歸測試工具，非對外使用者模式，已封存不在 Phase 0 路由。）
 
 ---
 

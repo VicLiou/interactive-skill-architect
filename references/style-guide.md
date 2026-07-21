@@ -83,7 +83,7 @@ metadata:
 
 - 一個 Skill **只做一類事**。如果發現同時橫跨兩種以上的應用類型（例如既做 CI/CD 又做 code review），應拆成兩個獨立的 Skill。
 - 設計模式可以組合（如 Inversion → Generator），但應用類型不應混合。
-- **生命週期管理例外（本技能適用）**：「Skill 生命週期管理」——涵蓋「建立新 Skill」「優化既有 Skill」「資安稽核」與「對本工具自我測試」——視為一種**合法的單一職責**。因為這些模式共用同一套規範真相（`style-guide.md`）與同一個目的：讓 Skill 符合最佳實踐並持續維持（優化把非本工具產出的 Skill 校正成一致、資安稽核把關安全、自我測試驗證本工具行為不退化）。本技能 `interactive-skill-architect` 即屬此例外，`metadata.type` 使用 `Skill Lifecycle Management`。此例外**僅適用於 meta 層級的生命週期工具**，不可作為一般產出 Skill 混合應用類型的藉口。
+- **生命週期管理例外（本技能適用）**：「Skill 生命週期管理」——對外涵蓋「建立新 Skill」「優化既有 Skill」「資安稽核」三種模式——視為一種**合法的單一職責**。因為這些模式共用同一套規範真相（`style-guide.md`）與同一個目的：讓 Skill 符合最佳實踐並持續維持（優化把非本工具產出的 Skill 校正成一致、資安稽核把關安全）。本技能 `interactive-skill-architect` 即屬此例外，`metadata.type` 使用 `Skill Lifecycle Management`。此例外**僅適用於 meta 層級的生命週期工具**，不可作為一般產出 Skill 混合應用類型的藉口。（本工具另有一套「自我測試」回歸機制，屬**維護者工具、非對外模式**，已封存不在 Phase 0 路由——它是本工具的內部品保，不影響單一職責的認定。）
 
 ## 7. 優化報告格式規範
 
